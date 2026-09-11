@@ -88,6 +88,77 @@ def setup_schema():
         with conn.cursor() as cursor:
             for statement in statements:
                 cursor.execute(statement)
+            migrations = {
+                "clubs": {
+                    "id": "TEXT",
+                    "name": "TEXT NOT NULL DEFAULT ''",
+                    "description": "TEXT NOT NULL DEFAULT ''",
+                    "category": "TEXT NOT NULL DEFAULT ''",
+                    "tagline": "TEXT NOT NULL DEFAULT ''",
+                    "eligibility": "TEXT NOT NULL DEFAULT ''",
+                    "membership_process": "TEXT NOT NULL DEFAULT ''",
+                    "meeting_schedule": "TEXT NOT NULL DEFAULT ''",
+                    "contact_email": "TEXT NOT NULL DEFAULT ''",
+                    "lead_name": "TEXT NOT NULL DEFAULT ''",
+                    "image_url": "TEXT NOT NULL DEFAULT ''",
+                    "tags": "JSONB NOT NULL DEFAULT '[]'",
+                    "member_count": "INTEGER NOT NULL DEFAULT 0",
+                    "founded_year": "INTEGER NOT NULL DEFAULT 2020",
+                    "created_at": "TEXT NOT NULL DEFAULT ''",
+                },
+                "events": {
+                    "id": "TEXT",
+                    "title": "TEXT NOT NULL DEFAULT ''",
+                    "description": "TEXT NOT NULL DEFAULT ''",
+                    "event_type": "TEXT NOT NULL DEFAULT ''",
+                    "start_time": "TEXT NOT NULL DEFAULT ''",
+                    "end_time": "TEXT NOT NULL DEFAULT ''",
+                    "venue": "TEXT NOT NULL DEFAULT ''",
+                    "organizer_club_id": "TEXT",
+                    "organizer_name": "TEXT NOT NULL DEFAULT ''",
+                    "image_url": "TEXT NOT NULL DEFAULT ''",
+                    "tags": "JSONB NOT NULL DEFAULT '[]'",
+                    "capacity": "INTEGER NOT NULL DEFAULT 100",
+                    "registered_count": "INTEGER NOT NULL DEFAULT 0",
+                    "registration_status": "TEXT NOT NULL DEFAULT 'open'",
+                    "created_at": "TEXT NOT NULL DEFAULT ''",
+                },
+                "announcements": {
+                    "id": "TEXT",
+                    "title": "TEXT NOT NULL DEFAULT ''",
+                    "body": "TEXT NOT NULL DEFAULT ''",
+                    "category": "TEXT NOT NULL DEFAULT ''",
+                    "posted_by": "TEXT NOT NULL DEFAULT ''",
+                    "is_pinned": "BOOLEAN NOT NULL DEFAULT FALSE",
+                    "created_at": "TEXT NOT NULL DEFAULT ''",
+                },
+                "membership_requests": {
+                    "id": "TEXT",
+                    "club_id": "TEXT NOT NULL DEFAULT ''",
+                    "name": "TEXT NOT NULL DEFAULT ''",
+                    "email": "TEXT NOT NULL DEFAULT ''",
+                    "department": "TEXT NOT NULL DEFAULT ''",
+                    "academic_year": "TEXT NOT NULL DEFAULT ''",
+                    "motivation": "TEXT NOT NULL DEFAULT ''",
+                    "experience_level": "TEXT NOT NULL DEFAULT 'beginner'",
+                    "status": "TEXT NOT NULL DEFAULT 'pending'",
+                    "created_at": "TEXT NOT NULL DEFAULT ''",
+                },
+                "rsvps": {
+                    "id": "TEXT",
+                    "event_id": "TEXT NOT NULL DEFAULT ''",
+                    "name": "TEXT NOT NULL DEFAULT ''",
+                    "email": "TEXT NOT NULL DEFAULT ''",
+                    "department": "TEXT NOT NULL DEFAULT ''",
+                    "academic_year": "TEXT NOT NULL DEFAULT ''",
+                    "questions": "TEXT DEFAULT ''",
+                    "status": "TEXT NOT NULL DEFAULT 'confirmed'",
+                    "created_at": "TEXT NOT NULL DEFAULT ''",
+                },
+            }
+            for table, columns in migrations.items():
+                for column, definition in columns.items():
+                    cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {definition}")
 
 app = FastAPI(title="CampusPulse API")
 api_router = APIRouter(prefix="/api")
