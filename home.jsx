@@ -102,7 +102,7 @@ export default function Home() {
       <section className="space-y-6" data-testid="featured-clubs-section">
         <SectionHeader eyebrow="Discover" title="Featured clubs this week" cta={{ to: "/clubs", label: "Browse all clubs" }} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {clubs.map((c) => <ClubCard key={c.id} club={c} />)}
+          {clubs.map((c) => <ClubCard key={c.id} club={c} showDetails />)}
         </div>
       </section>
 

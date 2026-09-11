@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Users, ArrowUpRight, Calendar } from "lucide-react";
+import { Users, ArrowUpRight, Calendar, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const CATEGORY_COLORS = {
@@ -11,7 +11,7 @@ const CATEGORY_COLORS = {
   Academic: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
-export default function ClubCard({ club }) {
+export default function ClubCard({ club, showDetails = false }) {
   const badge = CATEGORY_COLORS[club.category] || "bg-slate-50 text-slate-700 border-slate-200";
   return (
     <Link
@@ -36,6 +36,15 @@ export default function ClubCard({ club }) {
           <ArrowUpRight className="h-4 w-4 text-slate-400 group-hover:text-slate-900 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform shrink-0" />
         </div>
         <p className="text-sm text-slate-500 mt-1 italic">{club.tagline}</p>
+        {showDetails && (
+          <>
+            <p className="text-sm text-slate-600 mt-3 line-clamp-2">{club.description}</p>
+            <div className="inline-flex items-start gap-1.5 text-xs text-slate-500 mt-3 mono">
+              <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span className="line-clamp-2">{club.meeting_schedule}</span>
+            </div>
+          </>
+        )}
         <div className="flex flex-wrap gap-1.5 mt-3">
           {club.tags?.slice(0, 3).map((t) => (
             <Badge key={t} variant="secondary" className="bg-slate-100 text-slate-600 font-normal">{t}</Badge>
