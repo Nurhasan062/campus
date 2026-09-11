@@ -564,9 +564,9 @@ async def startup_seed():
         setup_schema()
         with connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) AS count FROM clubs")
-                count = cursor.fetchone()["count"]
-        if count == 0:
+                cursor.execute("SELECT (SELECT COUNT(*) FROM clubs) AS clubs, (SELECT COUNT(*) FROM events) AS events, (SELECT COUNT(*) FROM announcements) AS announcements")
+                counts = cursor.fetchone()
+        if not all(counts.values()):
             logger.info("Empty DB detected — seeding demo data.")
             await seed_data()
     except Exception as e:
