@@ -14,7 +14,7 @@ export default function App() {
   return (
     <div className="App">
       <Toaster position="top-right" richColors closeButton />
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Home />} />
