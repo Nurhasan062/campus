@@ -14,7 +14,7 @@ College students face difficulty discovering clubs and events on campus; informa
 - **Club lead**: currently read-only (future: club-admin dashboards)
 
 ## Architecture
-- Backend: FastAPI (`/app/backend/server.py`), MongoDB, all routes under `/api`. Auto-seeds on empty DB at startup.
+- Backend: FastAPI (`server.py`), PostgreSQL via Supabase, all routes under `/api`. Auto-creates tables and seeds an empty database at startup.
 - Frontend: React + React Router + shadcn/ui + Tailwind + Sonner. Fonts: Outfit (display) + Plus Jakarta Sans (body) + JetBrains Mono (accents).
 - Design archetype: Swiss High-Contrast Editorial × vibrant campus energy, light theme, glass header, marquee ticker.
 

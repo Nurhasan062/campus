@@ -1,7 +1,9 @@
 from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+import psycopg
+from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 import os
 import logging
 from pathlib import Path
@@ -13,9 +15,79 @@ from datetime import datetime, timezone, timedelta
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+database_url = os.environ.get('DATABASE_URL')
+if not database_url:
+    raise RuntimeError('DATABASE_URL is required')
+
+
+def connection():
+    return psycopg.connect(database_url, row_factory=dict_row)
+
+
+def prepare_values(data):
+    values = dict(data)
+    if 'tags' in values:
+        values['tags'] = Jsonb(values['tags'])
+    return values
+
+
+def insert_row(table, data):
+    values = prepare_values(data)
+    columns = list(values)
+    placeholders = ', '.join(f'%({column})s' for column in columns)
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f'INSERT INTO {table} ({", ".join(columns)}) VALUES ({placeholders})',
+                values,
+            )
+
+
+def insert_rows(table, rows):
+    for row in rows:
+        insert_row(table, row)
+
+
+def setup_schema():
+    statements = [
+        '''CREATE TABLE IF NOT EXISTS clubs (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, tagline TEXT NOT NULL,
+            description TEXT NOT NULL, category TEXT NOT NULL, eligibility TEXT NOT NULL,
+            membership_process TEXT NOT NULL, meeting_schedule TEXT NOT NULL,
+            contact_email TEXT NOT NULL, lead_name TEXT NOT NULL, image_url TEXT NOT NULL,
+            tags JSONB NOT NULL DEFAULT '[]', member_count INTEGER NOT NULL DEFAULT 0,
+            founded_year INTEGER NOT NULL DEFAULT 2020, created_at TEXT NOT NULL
+        )''',
+        '''CREATE TABLE IF NOT EXISTS events (
+            id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL,
+            event_type TEXT NOT NULL, start_time TEXT NOT NULL, end_time TEXT NOT NULL,
+            venue TEXT NOT NULL, organizer_club_id TEXT, organizer_name TEXT NOT NULL,
+            image_url TEXT NOT NULL, tags JSONB NOT NULL DEFAULT '[]',
+            capacity INTEGER NOT NULL DEFAULT 100, registered_count INTEGER NOT NULL DEFAULT 0,
+            registration_status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL
+        )''',
+        '''CREATE TABLE IF NOT EXISTS announcements (
+            id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL,
+            category TEXT NOT NULL, is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+            posted_by TEXT NOT NULL, created_at TEXT NOT NULL
+        )''',
+        '''CREATE TABLE IF NOT EXISTS membership_requests (
+            id TEXT PRIMARY KEY, club_id TEXT NOT NULL, name TEXT NOT NULL,
+            email TEXT NOT NULL, department TEXT NOT NULL, academic_year TEXT NOT NULL,
+            motivation TEXT NOT NULL, experience_level TEXT NOT NULL DEFAULT 'beginner',
+            status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL
+        )''',
+        '''CREATE TABLE IF NOT EXISTS rsvps (
+            id TEXT PRIMARY KEY, event_id TEXT NOT NULL, name TEXT NOT NULL,
+            email TEXT NOT NULL, department TEXT NOT NULL, academic_year TEXT NOT NULL,
+            questions TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'confirmed',
+            created_at TEXT NOT NULL
+        )''',
+    ]
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            for statement in statements:
+                cursor.execute(statement)
 
 app = FastAPI(title="CampusPulse API")
 api_router = APIRouter(prefix="/api")
@@ -172,12 +244,16 @@ async def root():
 
 @api_router.get("/stats")
 async def get_stats():
-    clubs = await db.clubs.count_documents({})
-    upcoming = await db.events.count_documents({"start_time": {"$gte": now_iso()}})
-    workshops = await db.events.count_documents({"event_type": "Workshop"})
-    members = 0
-    async for c in db.clubs.find({}, {"member_count": 1, "_id": 0}):
-        members += c.get("member_count", 0)
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) AS count FROM clubs")
+            clubs = cursor.fetchone()["count"]
+            cursor.execute("SELECT COUNT(*) AS count FROM events WHERE start_time >= %s", (now_iso(),))
+            upcoming = cursor.fetchone()["count"]
+            cursor.execute("SELECT COUNT(*) AS count FROM events WHERE event_type = 'Workshop'")
+            workshops = cursor.fetchone()["count"]
+            cursor.execute("SELECT COALESCE(SUM(member_count), 0) AS total FROM clubs")
+            members = cursor.fetchone()["total"]
     return {
         "total_clubs": clubs,
         "upcoming_events": upcoming,
@@ -189,23 +265,27 @@ async def get_stats():
 # ---- Clubs ----
 @api_router.get("/clubs", response_model=List[Club])
 async def list_clubs(category: Optional[str] = None, search: Optional[str] = None):
-    query = {}
+    conditions, values = [], []
     if category and category.lower() != "all":
-        query["category"] = category
+        conditions.append("category = %s")
+        values.append(category)
     if search:
-        query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"tagline": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"tags": {"$regex": search, "$options": "i"}},
-        ]
-    docs = await db.clubs.find(query, {"_id": 0}).to_list(500)
+        conditions.append("(name ILIKE %s OR tagline ILIKE %s OR description ILIKE %s OR tags::text ILIKE %s)")
+        values.extend([f"%{search}%"] * 4)
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(f"SELECT * FROM clubs {where} ORDER BY member_count DESC LIMIT 500", values)
+            docs = cursor.fetchall()
     return docs
 
 
 @api_router.get("/clubs/{club_id}", response_model=Club)
 async def get_club(club_id: str):
-    doc = await db.clubs.find_one({"id": club_id}, {"_id": 0})
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM clubs WHERE id = %s", (club_id,))
+            doc = cursor.fetchone()
     if not doc:
         raise HTTPException(404, "Club not found")
     return doc
@@ -214,31 +294,37 @@ async def get_club(club_id: str):
 @api_router.post("/clubs", response_model=Club)
 async def create_club(payload: ClubCreate):
     club = Club(**payload.model_dump())
-    await db.clubs.insert_one(club.model_dump())
+    insert_row("clubs", club.model_dump())
     return club
 
 
 # ---- Events ----
 @api_router.get("/events", response_model=List[Event])
 async def list_events(event_type: Optional[str] = None, search: Optional[str] = None, club_id: Optional[str] = None):
-    query = {}
+    conditions, values = [], []
     if event_type and event_type.lower() != "all":
-        query["event_type"] = event_type
+        conditions.append("event_type = %s")
+        values.append(event_type)
     if club_id:
-        query["organizer_club_id"] = club_id
+        conditions.append("organizer_club_id = %s")
+        values.append(club_id)
     if search:
-        query["$or"] = [
-            {"title": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"venue": {"$regex": search, "$options": "i"}},
-        ]
-    docs = await db.events.find(query, {"_id": 0}).sort("start_time", 1).to_list(500)
+        conditions.append("(title ILIKE %s OR description ILIKE %s OR venue ILIKE %s)")
+        values.extend([f"%{search}%"] * 3)
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(f"SELECT * FROM events {where} ORDER BY start_time ASC LIMIT 500", values)
+            docs = cursor.fetchall()
     return docs
 
 
 @api_router.get("/events/{event_id}", response_model=Event)
 async def get_event(event_id: str):
-    doc = await db.events.find_one({"id": event_id}, {"_id": 0})
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+            doc = cursor.fetchone()
     if not doc:
         raise HTTPException(404, "Event not found")
     return doc
@@ -247,55 +333,67 @@ async def get_event(event_id: str):
 @api_router.post("/events", response_model=Event)
 async def create_event(payload: EventCreate):
     event = Event(**payload.model_dump())
-    await db.events.insert_one(event.model_dump())
+    insert_row("events", event.model_dump())
     return event
 
 
 # ---- Announcements ----
 @api_router.get("/announcements", response_model=List[Announcement])
 async def list_announcements(category: Optional[str] = None):
-    query = {}
+    values = []
+    where = ""
     if category and category.lower() != "all":
-        query["category"] = category
-    docs = await db.announcements.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    # sort pinned first
-    docs.sort(key=lambda x: (not x.get("is_pinned", False), x.get("created_at", "")), reverse=False)
-    docs.sort(key=lambda x: x.get("is_pinned", False), reverse=True)
+        where = "WHERE category = %s"
+        values.append(category)
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(f"SELECT * FROM announcements {where} ORDER BY is_pinned DESC, created_at DESC LIMIT 500", values)
+            docs = cursor.fetchall()
     return docs
 
 
 @api_router.post("/announcements", response_model=Announcement)
 async def create_announcement(payload: AnnouncementCreate):
     ann = Announcement(**payload.model_dump())
-    await db.announcements.insert_one(ann.model_dump())
+    insert_row("announcements", ann.model_dump())
     return ann
 
 
 # ---- Membership Requests ----
 @api_router.post("/membership-requests", response_model=MembershipRequest)
 async def submit_membership_request(payload: MembershipRequestCreate):
-    club = await db.clubs.find_one({"id": payload.club_id}, {"_id": 0})
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM clubs WHERE id = %s", (payload.club_id,))
+            club = cursor.fetchone()
     if not club:
         raise HTTPException(404, "Club not found")
     req = MembershipRequest(**payload.model_dump())
-    await db.membership_requests.insert_one(req.model_dump())
-    await db.clubs.update_one({"id": payload.club_id}, {"$inc": {"member_count": 1}})
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO membership_requests (id, club_id, name, email, department, academic_year, motivation, experience_level, status, created_at) VALUES (%(id)s, %(club_id)s, %(name)s, %(email)s, %(department)s, %(academic_year)s, %(motivation)s, %(experience_level)s, %(status)s, %(created_at)s)", req.model_dump())
+            cursor.execute("UPDATE clubs SET member_count = member_count + 1 WHERE id = %s", (payload.club_id,))
     return req
 
 
 @api_router.get("/membership-requests", response_model=List[MembershipRequest])
 async def list_membership_requests(club_id: Optional[str] = None):
-    query = {}
-    if club_id:
-        query["club_id"] = club_id
-    docs = await db.membership_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    where = "WHERE club_id = %s" if club_id else ""
+    values = (club_id,) if club_id else ()
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(f"SELECT * FROM membership_requests {where} ORDER BY created_at DESC LIMIT 500", values)
+            docs = cursor.fetchall()
     return docs
 
 
 # ---- RSVPs ----
 @api_router.post("/rsvps", response_model=EventRSVP)
 async def submit_rsvp(payload: EventRSVPCreate):
-    event = await db.events.find_one({"id": payload.event_id}, {"_id": 0})
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM events WHERE id = %s", (payload.event_id,))
+            event = cursor.fetchone()
     if not event:
         raise HTTPException(404, "Event not found")
     if event.get("registration_status") == "closed":
@@ -303,26 +401,30 @@ async def submit_rsvp(payload: EventRSVPCreate):
     if event.get("registered_count", 0) >= event.get("capacity", 100):
         raise HTTPException(400, "Event is fully booked")
     rsvp = EventRSVP(**payload.model_dump())
-    await db.rsvps.insert_one(rsvp.model_dump())
-    await db.events.update_one({"id": payload.event_id}, {"$inc": {"registered_count": 1}})
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO rsvps (id, event_id, name, email, department, academic_year, questions, status, created_at) VALUES (%(id)s, %(event_id)s, %(name)s, %(email)s, %(department)s, %(academic_year)s, %(questions)s, %(status)s, %(created_at)s)", rsvp.model_dump())
+            cursor.execute("UPDATE events SET registered_count = registered_count + 1 WHERE id = %s", (payload.event_id,))
     return rsvp
 
 
 @api_router.get("/rsvps", response_model=List[EventRSVP])
 async def list_rsvps(event_id: Optional[str] = None):
-    query = {}
-    if event_id:
-        query["event_id"] = event_id
-    docs = await db.rsvps.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    where = "WHERE event_id = %s" if event_id else ""
+    values = (event_id,) if event_id else ()
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(f"SELECT * FROM rsvps {where} ORDER BY created_at DESC LIMIT 500", values)
+            docs = cursor.fetchall()
     return docs
 
 
 # ---- Seed ----
 @api_router.post("/seed")
 async def seed_data():
-    await db.clubs.delete_many({})
-    await db.events.delete_many({})
-    await db.announcements.delete_many({})
+    with connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("TRUNCATE clubs, events, announcements CASCADE")
 
     now = datetime.now(timezone.utc)
 
@@ -339,7 +441,7 @@ async def seed_data():
     ]
 
     club_objs = [Club(**c) for c in clubs_data]
-    await db.clubs.insert_many([c.model_dump() for c in club_objs])
+    insert_rows("clubs", [c.model_dump() for c in club_objs])
 
     # id lookups
     by_name = {c.name: c.id for c in club_objs}
@@ -355,7 +457,7 @@ async def seed_data():
         {"title": "Regional Kitchens — Assam Pop-up Night", "description": "A four-course tasting from Upper Assam with stories behind every dish. Vegetarian & non-veg options.", "event_type": "Cultural", "start_time": (now + timedelta(days=12, hours=19)).isoformat(), "end_time": (now + timedelta(days=12, hours=22)).isoformat(), "venue": "Hostel Common Kitchen", "organizer_club_id": by_name["Hearth Culinary Society"], "organizer_name": "Hearth Culinary Society", "image_url": "https://images.unsplash.com/photo-1781583847268-46d15bfe5609?crop=entropy&cs=srgb&fm=jpg&q=85", "tags": ["Food", "Assam", "Tasting"], "capacity": 40, "registration_status": "limited"},
     ]
     event_objs = [Event(**e) for e in events_data]
-    await db.events.insert_many([e.model_dump() for e in event_objs])
+    insert_rows("events", [e.model_dump() for e in event_objs])
 
     announcements_data = [
         {"title": "Spring Fest 2026 · Central line-up dropped", "body": "Tickets for the Spring Fest headliner night open Friday 6 PM. Priority window for verified club members starts Thursday 9 PM.", "category": "Event", "is_pinned": True, "posted_by": "Student Council"},
@@ -366,7 +468,7 @@ async def seed_data():
         {"title": "New club spotlight: Hearth Culinary Society", "body": "The newest addition to the campus roster. Open house this Sunday — bring one home recipe.", "category": "General", "is_pinned": False, "posted_by": "Student Affairs"},
     ]
     ann_objs = [Announcement(**a) for a in announcements_data]
-    await db.announcements.insert_many([a.model_dump() for a in ann_objs])
+    insert_rows("announcements", [a.model_dump() for a in ann_objs])
 
     return {"status": "seeded", "clubs": len(club_objs), "events": len(event_objs), "announcements": len(ann_objs)}
 
@@ -388,7 +490,11 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_seed():
     try:
-        count = await db.clubs.count_documents({})
+        setup_schema()
+        with connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) AS count FROM clubs")
+                count = cursor.fetchone()["count"]
         if count == 0:
             logger.info("Empty DB detected — seeding demo data.")
             await seed_data()
@@ -396,6 +502,3 @@ async def startup_seed():
         logger.exception("Startup seed failed: %s", e)
 
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
