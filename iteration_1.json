@@ -1,0 +1,32 @@
+{
+  "summary": "Full backend + core frontend smoke passed. All 9 clubs, 8 events, 6 announcements seeded. Stats correct. Filter, search, detail, membership-request, and RSVP endpoints all working; counters increment. Frontend: Home, Clubs (search + Tech filter + empty state), Club detail (tabs + Express Interest submit + toast), Events (list + Workshop filter), Event detail (RSVP submit), Announcements page all render and function correctly. Note: category/event-type filter data-testids use LOWERCASE (e.g., 'category-filter-tech-button'), not PascalCase as listed in the review request — using lowercase works.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "passed": [
+    "GET /api/stats -> {total_clubs:9, upcoming_events:8, weekly_workshops:2, active_members:1187}",
+    "GET /api/clubs returns 9 seeded clubs",
+    "GET /api/clubs?category=Tech returns 2 (Byte Labs, Quantum Robotics)",
+    "GET /api/clubs?search=coding returns Byte Labs Coding Club",
+    "GET /api/clubs/{id} returns full details (tags, eligibility, membership_process, meeting_schedule)",
+    "GET /api/events returns 8 seeded events",
+    "GET /api/events?event_type=Workshop returns 2",
+    "GET /api/events?club_id={id} filters by organizer",
+    "GET /api/events/{id} returns full details",
+    "GET /api/announcements returns 6, pinned first (2 pinned at top)",
+    "POST /api/membership-requests creates request, status=pending, club member_count 215 -> 216",
+    "POST /api/rsvps creates RSVP, status=confirmed, event registered_count 1 -> 2",
+    "Frontend Home (/) renders hero, stats (9,8,2,1189), ticker with live announcements",
+    "Frontend Clubs (/clubs): 9 cards, Tech filter -> 2 cards, empty state visible on 'zzzznonexist'",
+    "Frontend Club detail: About/Eligibility/Process/Events tabs switch; Express Interest dialog submits with 'Interest sent' toast",
+    "Frontend Events (/events): 8 cards; Workshop filter -> 2 cards",
+    "Frontend Event detail: RSVP form submits successfully",
+    "Frontend Announcements (/announcements) renders 6 cards"
+  ],
+  "failed": [],
+  "action_items": [
+    "Minor doc mismatch: review request lists filter testids as 'category-filter-Tech-button' but code emits lowercase 'category-filter-tech-button'. Either update docs or emit both — not a functional blocker."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
+
