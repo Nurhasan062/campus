@@ -9,9 +9,4 @@ export default defineConfig({
       "@": path.resolve(process.cwd()),
     },
   },
-  server: {
-    proxy: {
-      "/api": "http://localhost:8000",
-    },
-  },
 });
