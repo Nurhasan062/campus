@@ -33,6 +33,8 @@ def prepare_values(data):
 
 def insert_row(table, data):
     values = prepare_values(data)
+    if table == "events" and "date" not in values:
+        values["date"] = values.get("start_time", now_iso())[:10]
     columns = list(values)
     placeholders = ', '.join(f'%({column})s' for column in columns)
     with connection() as conn:
