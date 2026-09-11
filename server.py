@@ -166,6 +166,11 @@ app = FastAPI(title="CampusPulse API")
 api_router = APIRouter(prefix="/api")
 
 
+@app.get("/")
+async def health_check():
+    return {"message": "CampusPulse API is live"}
+
+
 # =========================
 # Models
 # =========================
