@@ -3,7 +3,7 @@ const venues = ["Innovation Lab", "Main Quad", "Central Library", "Student Commo
 const themes = ["Design Sprint", "AI Study Jam", "Open Mic", "Community Mixer", "Career Lab", "Build Night", "Wellness Hour", "Idea Showcase", "Debate Forum", "Makers Fair"];
 const imageUrl = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80";
 
-export const sampleEvents = Array.from({ length: 100 }, (_, index) => {
+export const sampleEvents = Array.from({ length: 500 }, (_, index) => {
   const start = new Date(Date.now() + (index + 1) * 86400000);
   start.setHours(10 + (index % 8), index % 2 ? 30 : 0, 0, 0);
   const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);

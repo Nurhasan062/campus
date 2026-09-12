@@ -1,7 +1,7 @@
 const categories = ["General", "Urgent", "Academic", "Event"];
 const topics = ["Library hours", "Spring Fest", "Club registration", "Campus transport", "Scholarship office", "Wellness center", "Career services", "Student council", "Exam schedule", "Volunteer drive"];
 
-export const sampleAnnouncements = Array.from({ length: 100 }, (_, index) => {
+export const sampleAnnouncements = Array.from({ length: 50 }, (_, index) => {
   const topic = topics[index % topics.length];
   return {
     id: `sample-announcement-${String(index + 1).padStart(3, "0")}`,
