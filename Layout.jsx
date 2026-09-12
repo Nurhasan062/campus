@@ -1,4 +1,4 @@
-import { Outlet, NavLink, Link } from "react-router-dom";
+import { Outlet, NavLink, Link, Navigate, useLocation } from "react-router-dom";
 import { Sparkles, Menu, LayoutDashboard, LogIn, LogOut, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getCurrentUser, logoutUser } from "@/lib/auth";
@@ -11,11 +11,13 @@ const nav = [
   { to: "/events", label: "Events", testid: "nav-events-link" },
   { to: "/announcements", label: "Announcements", testid: "nav-announcements-link" },
   { to: "/dashboard", label: "My dashboard", icon: <LayoutDashboard className="h-4 w-4" />, testid: "nav-dashboard-link" },
+  { to: "/admin", label: "Admin console", admin: true, testid: "nav-admin-link" },
 ];
 
 export default function Layout() {
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState(getCurrentUser);
+  const location = useLocation();
 
   useEffect(() => {
     const syncUser = () => setUser(getCurrentUser());
@@ -26,6 +28,9 @@ export default function Layout() {
       window.removeEventListener("storage", syncUser);
     };
   });
+
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/register";
+  if (!user && !isAuthPage) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 overflow-x-hidden">
@@ -45,7 +50,7 @@ export default function Layout() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
-            {nav.map((n) => (
+            {nav.filter((n) => !n.admin || user?.role === "admin").map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
@@ -87,7 +92,7 @@ export default function Layout() {
               </SheetTrigger>
               <SheetContent side="right" className="bg-white w-72">
                 <div className="flex flex-col gap-1 mt-8">
-                  {nav.map((n) => (
+                  {nav.filter((n) => !n.admin || user?.role === "admin").map((n) => (
                     <NavLink
                       key={n.to}
                       to={n.to}

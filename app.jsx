@@ -11,6 +11,7 @@ import EventDetail from "@/pages/EventDetail";
 import Announcements from "@/pages/Announcements";
 import Dashboard from "@/pages/Dashboard";
 import Auth from "@/pages/Auth";
+import Admin from "@/pages/Admin";
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/login" element={<Auth mode="login" />} />
             <Route path="/register" element={<Auth mode="register" />} />
+            <Route path="/admin" element={<Admin />} />
           </Route>
         </Routes>
       </BrowserRouter>

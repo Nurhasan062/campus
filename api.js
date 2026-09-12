@@ -16,12 +16,18 @@ function filterClubs(clubs, params = {}) {
 }
 
 export const fetchClubs = (params = {}) => api.get("/clubs", { params })
-	.then((r) => [...r.data, ...sampleClubs])
-	.catch(() => filterClubs(sampleClubs, params));
-export const fetchClub = (id) => api.get(`/clubs/${id}`).then((r) => r.data).catch(() => getSampleClub(id));
-export const fetchEvents = (params = {}) => api.get("/events", { params }).then((r) => r.data);
+	.then((r) => filterClubs([...r.data, ...readLocal("campuspulse-admin-clubs"), ...sampleClubs], params))
+	.catch(() => filterClubs([...readLocal("campuspulse-admin-clubs"), ...sampleClubs], params));
+export const fetchClub = (id) => api.get(`/clubs/${id}`).then((r) => r.data).catch(() => readLocal("campuspulse-admin-clubs").find((club) => club.id === id) || getSampleClub(id));
+export const fetchEvents = (params = {}) => api.get("/events", { params }).then((r) => [...r.data, ...readLocal("campuspulse-admin-events")]).catch(() => readLocal("campuspulse-admin-events"));
 export const fetchEvent = (id) => api.get(`/events/${id}`).then((r) => r.data);
 export const fetchAnnouncements = (params = {}) => api.get("/announcements", { params }).then((r) => r.data);
 export const fetchStats = () => api.get("/stats").then((r) => r.data);
 export const postMembership = (payload) => api.post("/membership-requests", payload).then((r) => r.data);
 export const postRSVP = (payload) => api.post("/rsvps", payload).then((r) => r.data);
+export const postClub = (payload) => api.post("/clubs", payload).then((r) => r.data);
+export const postEvent = (payload) => api.post("/events", payload).then((r) => r.data);
+
+function readLocal(key) {
+	try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; }
+}

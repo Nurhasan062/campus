@@ -75,6 +75,7 @@ export default function Auth({ mode = "login" }) {
 
           <div className="flex items-center gap-2 text-xs text-slate-500 mt-6"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> Your email is used only for your CampusPulse account.</div>
           <p className="text-sm text-center text-slate-600 mt-8">{isRegister ? "Already have an account?" : "New to CampusPulse?"} <Link to={isRegister ? "/login" : "/register"} className="font-semibold text-blue-700 hover:text-blue-800">{isRegister ? "Sign in" : "Create one"}</Link></p>
+          {!isRegister && <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><strong>Admin access:</strong> admin@campuspulse.local · Admin123!</div>}
         </div>
       </div>
     </div>
