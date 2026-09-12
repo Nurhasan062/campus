@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { fetchClubs } from "@/lib/api";
 import ClubCard from "@/components/ClubCard";
 
-const CATEGORIES = ["All", "Tech", "Arts", "Cultural", "Sports", "Social", "Academic"];
+const CATEGORIES = ["All", "Tech", "Arts", "Cultural", "Sports", "Social", "Academic", "Wellness", "Entrepreneurship", "Media", "Environment"];
 const SORTS = [
   { v: "popular", label: "Most Members" },
   { v: "az", label: "A → Z" },

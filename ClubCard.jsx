@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
-import { Users, ArrowUpRight, Calendar, Clock } from "lucide-react";
+import { Users, ArrowUpRight, Calendar, Clock, Bookmark, BookmarkCheck } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+
+const SAVED_CLUBS_KEY = "campuspulse-saved-clubs";
 
 const CATEGORY_COLORS = {
   Tech: "bg-blue-50 text-blue-700 border-blue-200",
@@ -12,10 +15,28 @@ const CATEGORY_COLORS = {
 };
 
 export default function ClubCard({ club, showDetails = false }) {
+  const [saved, setSaved] = useState(false);
   const badge = CATEGORY_COLORS[club.category] || "bg-slate-50 text-slate-700 border-slate-200";
+
+  useEffect(() => {
+    const savedClubs = JSON.parse(localStorage.getItem(SAVED_CLUBS_KEY) || "[]");
+    setSaved(savedClubs.includes(club.id));
+  }, [club.id]);
+
+  const toggleSaved = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const savedClubs = JSON.parse(localStorage.getItem(SAVED_CLUBS_KEY) || "[]");
+    const next = savedClubs.includes(club.id)
+      ? savedClubs.filter((id) => id !== club.id)
+      : [...savedClubs, club.id];
+    localStorage.setItem(SAVED_CLUBS_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event("campuspulse-saved-clubs-changed"));
+    setSaved(next.includes(club.id));
+  };
+
   return (
-    <Link
-      to={`/clubs/${club.id}`}
+    <div
       data-testid={`club-card-${club.id}`}
       className="card-lift group bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col min-w-0"
     >
@@ -29,8 +50,11 @@ export default function ClubCard({ club, showDetails = false }) {
         <span className={`absolute top-3 left-3 text-[10px] font-semibold uppercase tracking-widest mono px-2.5 py-1 rounded-full border ${badge}`}>
           {club.category}
         </span>
+        <button type="button" onClick={toggleSaved} aria-label={saved ? `Remove ${club.name} from saved clubs` : `Save ${club.name}`} className="absolute top-3 right-3 h-9 w-9 rounded-full bg-white/90 text-slate-700 flex items-center justify-center shadow-sm hover:bg-white" data-testid={`save-club-${club.id}-button`}>
+          {saved ? <BookmarkCheck className="h-4 w-4 text-blue-600" /> : <Bookmark className="h-4 w-4" />}
+        </button>
       </div>
-      <div className="p-5 flex flex-col flex-1 min-w-0">
+      <Link to={`/clubs/${club.id}`} className="p-5 flex flex-col flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-lg font-bold display leading-snug truncate" title={club.name}>{club.name}</h3>
           <ArrowUpRight className="h-4 w-4 text-slate-400 group-hover:text-slate-900 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform shrink-0" />
@@ -54,7 +78,7 @@ export default function ClubCard({ club, showDetails = false }) {
           <span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> {club.member_count} members</span>
           <span className="inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Est. {club.founded_year}</span>
         </div>
-      </div>
-    </Link>
+      </Link>
+    </div>
   );
 }

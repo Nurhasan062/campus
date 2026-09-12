@@ -1,6 +1,7 @@
 import { Outlet, NavLink, Link } from "react-router-dom";
-import { Sparkles, Menu } from "lucide-react";
-import { useState } from "react";
+import { Sparkles, Menu, LayoutDashboard, LogIn, LogOut, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { getCurrentUser, logoutUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -9,10 +10,22 @@ const nav = [
   { to: "/clubs", label: "Clubs", testid: "nav-clubs-link" },
   { to: "/events", label: "Events", testid: "nav-events-link" },
   { to: "/announcements", label: "Announcements", testid: "nav-announcements-link" },
+  { to: "/dashboard", label: "My dashboard", icon: <LayoutDashboard className="h-4 w-4" />, testid: "nav-dashboard-link" },
 ];
 
 export default function Layout() {
   const [open, setOpen] = useState(false);
+  const [user, setUser] = useState(getCurrentUser);
+
+  useEffect(() => {
+    const syncUser = () => setUser(getCurrentUser());
+    window.addEventListener("campuspulse-auth-changed", syncUser);
+    window.addEventListener("storage", syncUser);
+    return () => {
+      window.removeEventListener("campuspulse-auth-changed", syncUser);
+      window.removeEventListener("storage", syncUser);
+    };
+  });
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 overflow-x-hidden">
@@ -44,12 +57,23 @@ export default function Layout() {
                   }`
                 }
               >
-                {n.label}
+                <span className="inline-flex items-center gap-2">{n.icon}{n.label}</span>
               </NavLink>
             ))}
           </nav>
 
           <div className="flex items-center gap-2">
+            {user ? (
+              <div className="hidden md:flex items-center gap-2">
+                <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-blue-700" data-testid="header-user-link">
+                  <span className="h-8 w-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center"><UserRound className="h-4 w-4" /></span>
+                  {user.name}
+                </Link>
+                <Button variant="ghost" size="icon" onClick={() => { logoutUser(); setUser(null); }} aria-label="Sign out" data-testid="header-logout-button"><LogOut className="h-4 w-4" /></Button>
+              </div>
+            ) : (
+              <Link to="/login" className="hidden md:block"><Button variant="outline" className="rounded-lg" data-testid="header-login-link"><LogIn className="h-4 w-4 mr-2" /> Log in</Button></Link>
+            )}
             <Link to="/clubs" className="hidden md:block">
               <Button className="bg-slate-900 hover:bg-slate-800 rounded-lg" data-testid="header-discover-cta">
                 Discover Clubs
@@ -76,7 +100,7 @@ export default function Layout() {
                         }`
                       }
                     >
-                      {n.label}
+                      <span className="inline-flex items-center gap-2">{n.icon}{n.label}</span>
                     </NavLink>
                   ))}
                   <Link to="/clubs" onClick={() => setOpen(false)}>
@@ -84,6 +108,11 @@ export default function Layout() {
                       Discover Clubs
                     </Button>
                   </Link>
+                  {user ? (
+                    <Button variant="outline" className="w-full mt-2" onClick={() => { logoutUser(); setUser(null); setOpen(false); }} data-testid="mobile-logout-button"><LogOut className="h-4 w-4 mr-2" /> Sign out</Button>
+                  ) : (
+                    <Link to="/login" onClick={() => setOpen(false)}><Button variant="outline" className="w-full mt-2" data-testid="mobile-login-link"><LogIn className="h-4 w-4 mr-2" /> Log in</Button></Link>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>
